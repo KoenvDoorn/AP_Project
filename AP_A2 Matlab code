@@ -1,0 +1,59 @@
+%% 2.1 construct own size factor f_SMB = Lo10 - Hi10 
+
+DataSizePortf_array = table2array(DataSizePortf(:,2:11));
+f_SMB = DataSizePortf_array(:,1) - DataSizePortf_array(:,10);
+mean_f = mean(f_SMB);
+stdv_f = sqrt(cov(f_SMB));
+skewness_f = skewness(f_SMB);
+kurtosis_f = kurtosis(f_SMB);
+
+%% 2.2 regress size factor on 
+DataFamaFrench_array = table2array(DataFamaFrench(:,2:5));
+MarketExcess = DataFamaFrench_array(:,1);
+
+%create regression f_SMB(t) = alpha * MarketExcess(t) + epsilon(t)
+n = length(f_SMB);
+Constant = ones(n, 1);
+X = [Constant, MarketExcess];
+[b,~,~,~,~] = regress(f_SMB, X);
+%Alpha = b(1);
+%beta = b(2) 
+
+%more useful function for regression is fitlm function
+model1 = fitlm(MarketExcess, f_SMB);
+    %disp(model1);
+
+%% 2.3  Regress excess returns of portfolio's on market excess returns and size factor. perform GRS test  
+% PortfExcess_i(t) = alpha_i + beta_i * MarketExcess(t) + gamma_i * f_SMB(t) + epsilon_i(t) or Y = XB + epsilon 
+
+Portfolios5x5WoutDiv2S9_array = table2array(Portfolios5x5WoutDiv2S9(:,2:26));
+Portfolios5x5WoutDiv2S9_array_Excess = Portfolios5x5WoutDiv2S9_array - DataFamaFrench_array(:,4);
+ 
+Y = Portfolios5x5WoutDiv2S9_array_Excess;
+X = [ones(size(MarketExcess)), MarketExcess, f_SMB];
+%[B, stats] = mvregress(X, Y); also possible for B
+B = (X' * X) \ (X' * Y);
+% Every column in B represents regression coefficients alpha, beta and gamma for portfolio i = 1,...,25
+Alphas = B(1, :);
+
+% CALCULATE GRS TEST STATISTIC
+% Calculate predicted values
+Y_hat = X * B;
+% Calculate residuals
+residuals = Y - Y_hat;
+T = 698; % Number of observations 
+n = 25; % Number of assets 
+Sigma = cov(residuals);
+Sigma_unbiased = (T/(T-2)) * Sigma;
+q11 = Sigma(1,1);
+
+% GRS test-statistic
+
+z = ((T-n-1)/(n*(T-2))) * (1/q11) * Alphas * inv(Sigma_unbiased) * Alphas'; 
+
+% Calculate the p-value
+d1 = n;
+d2 = T-n-1;
+alpha = 0.05;
+p_value = 1 - fcdf(z, d1, d2);
+critical_value = finv(1 - alpha, d1, d2);
